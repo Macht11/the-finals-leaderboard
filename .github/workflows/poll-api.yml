@@ -1,0 +1,42 @@
+name: Poll The Finals API
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Every hour
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Fetch leaderboard data
+        run: |
+          mkdir -p data/snapshots
+          curl -s "https://api.the-finals-leaderboard.com/v1/leaderboard/s9/crossplay" > "data/snapshots/s9-$(date +%Y%m%d-%H%M).json"
+      
+      - name: Process and update history
+        run: node scripts/process-history.js
+      
+      - name: Commit and push
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update leaderboard snapshot $(date -u +%Y-%m-%d_%H:%M)"
+            git push
+          fi
